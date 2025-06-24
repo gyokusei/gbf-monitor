@@ -54,18 +54,18 @@
         span.flatpickr-weekday, .numInputWrapper span { color: #a0aec0; }
         .quick-select-btn { @apply bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs font-semibold py-1 px-3 rounded-full transition-all duration-200; }
         .chart-control-btn { @apply bg-gray-900/50 hover:bg-gray-900/80 text-white p-2 rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed; }
+        .lang-btn { @apply text-sm text-gray-400 hover:text-white transition-colors duration-200 px-2; }
+        .lang-btn.active-lang { @apply text-white font-bold; }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen flex items-center justify-center p-4">
 
     <div class="w-full max-w-4xl bg-gray-800 rounded-xl shadow-2xl p-6 md:p-8 space-y-6 relative">
         <!-- Language Switcher -->
-        <div class="absolute top-4 left-4">
-            <select id="lang-switcher" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-1.5">
-                <option value="zh">中文</option>
-                <option value="en">English</option>
-                <option value="ja">日本語</option>
-            </select>
+        <div id="lang-switcher-container" class="absolute top-4 left-4 flex divide-x divide-gray-600">
+            <button data-lang="ja" class="lang-btn">日本語</button>
+            <button data-lang="en" class="lang-btn">English</button>
+            <button data-lang="zh" class="lang-btn">中文</button>
         </div>
         
         <!-- Header -->
@@ -238,7 +238,7 @@
         const timeRangePickerInput = document.getElementById('time-range-picker');
         const resetFilterButton = document.getElementById('reset-filter-button');
         const quickSelectContainer = document.getElementById('quick-select-container');
-        const langSwitcher = document.getElementById('lang-switcher');
+        const langSwitcherContainer = document.getElementById('lang-switcher-container');
         const toggleZoomBtn = document.getElementById('toggle-zoom-btn');
         const zoomBackBtn = document.getElementById('zoom-back-btn');
         const iconZoomEnabled = document.getElementById('icon-zoom-enabled');
@@ -461,6 +461,10 @@
                 const key = el.dataset.i18nTitle;
                 el.title = translations[lang][key] || el.title;
             });
+            
+             document.querySelectorAll('#lang-switcher-container .lang-btn').forEach(btn => {
+                btn.classList.toggle('active-lang', btn.dataset.lang === lang);
+            });
 
             initTimePickers();
             
@@ -563,15 +567,16 @@
             }
         });
 
-        langSwitcher.addEventListener('change', (e) => {
-            setLanguage(e.target.value);
+        langSwitcherContainer.addEventListener('click', (e) => {
+            if(e.target.matches('.lang-btn')) {
+                setLanguage(e.target.dataset.lang);
+            }
         });
 
         window.addEventListener('load', () => {
             const savedLang = localStorage.getItem('gbf-tool-language');
             const browserLang = navigator.language.split('-')[0];
             const initialLang = savedLang || (['en', 'ja'].includes(browserLang) ? browserLang : 'zh');
-            langSwitcher.value = initialLang;
             setLanguage(initialLang);
             updateZoomButtons();
         });
