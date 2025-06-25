@@ -113,6 +113,16 @@
         <div class="bg-gray-700/50 rounded-lg p-4 transition-all duration-500 relative">
             <canvas id="point-chart" style="min-height: 400px;"></canvas>
             <div id="chart-controls" class="absolute top-2 right-2 flex space-x-2">
+                <button id="select-all-btn" class="chart-control-btn" data-i18n-title="selectAll">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+                <button id="deselect-all-btn" class="chart-control-btn" data-i18n-title="deselectAll">
+                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                </button>
                 <button id="toggle-zoom-btn" class="chart-control-btn">
                      <span id="icon-zoom-enabled" title="禁用框选缩放">
                         <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-6" /></svg>
@@ -164,7 +174,9 @@
                 chartTitle: "贡献度变化曲线",
                 chartAxisX: "时间 (JST - 可拖拽/滚轮缩放)",
                 chartAxisY: "贡献度 (Point)",
-                quickSelect: { today: '今天 (JST)', yesterday: '昨天 (JST)', last1h: '最近1小时', last3h: '最近3小时', last6h: '最近6小时' }
+                quickSelect: { today: '今天 (JST)', yesterday: '昨天 (JST)', last1h: '最近1小时', last3h: '最近3小时', last6h: '最近6小时' },
+                selectAll: "全选",
+                deselectAll: "全不选"
             },
             en: {
                 title: "GBF Honor Visualizer",
@@ -194,7 +206,9 @@
                 chartTitle: "Honor Contribution Curve",
                 chartAxisX: "Time (JST - Drag/scroll to zoom)",
                 chartAxisY: "Honor (Points)",
-                quickSelect: { today: 'Today (JST)', yesterday: 'Yesterday (JST)', last1h: 'Last 1h', last3h: 'Last 3h', last6h: 'Last 6h' }
+                quickSelect: { today: 'Today (JST)', yesterday: 'Yesterday (JST)', last1h: 'Last 1h', last3h: 'Last 3h', last6h: 'Last 6h' },
+                selectAll: "Select All",
+                deselectAll: "Deselect All"
             },
             ja: {
                 title: "グラブル貢献度可視化ツール",
@@ -224,7 +238,9 @@
                 chartTitle: "貢献度変化曲線",
                 chartAxisX: "時間 (JST - ドラッグ/スクロールでズーム)",
                 chartAxisY: "貢献度 (ポイント)",
-                quickSelect: { today: '今日 (JST)', yesterday: '昨日 (JST)', last1h: '最近1時間', last3h: '最近3時間', last6h: '最近6時間' }
+                quickSelect: { today: '今日 (JST)', yesterday: '昨日 (JST)', last1h: '最近1時間', last3h: '最近3時間', last6h: '最近6時間' },
+                selectAll: "すべて選択",
+                deselectAll: "すべて選択解除"
             }
         };
         let currentLang = 'zh';
@@ -241,6 +257,8 @@
         const langSwitcherContainer = document.getElementById('lang-switcher-container');
         const toggleZoomBtn = document.getElementById('toggle-zoom-btn');
         const zoomBackBtn = document.getElementById('zoom-back-btn');
+        const selectAllBtn = document.getElementById('select-all-btn');
+        const deselectAllBtn = document.getElementById('deselect-all-btn');
         
         let pointChart = null;
         let fullDatasets = [];
@@ -328,6 +346,7 @@
 
             if (validResults.length === 0) {
                 updateStatus(translations[currentLang].statusNoData, true);
+                 fullDatasets = []; 
             } else {
                 updateStatus(translations[currentLang].statusSuccess, true);
             }
@@ -338,7 +357,7 @@
                 const dataPoints = result.data
                     .map(d => ({ x: d.updatetime * 1000, y: d.point }))
                     .sort((a, b) => a.x - b.x); 
-                return { label, data: dataPoints, originalData: dataPoints, borderColor: color, backgroundColor: color.replace('0.8', '0.2'), tension: 0.1, borderWidth: 2, pointBackgroundColor: color, pointRadius: 3, pointHoverRadius: 6 };
+                return { label, data: dataPoints, originalData: dataPoints, borderColor: color, backgroundColor: color.replace('0.8', '0.2'), tension: 0.1, borderWidth: 2, pointBackgroundColor: color, pointRadius: 3, pointHoverRadius: 6, hidden: false };
             });
             
             drawOrUpdateChart();
@@ -366,8 +385,8 @@
                 minTimestamp = selectedDates[0].getTime();
                 maxTimestamp = selectedDates[1].getTime();
             }
-
-            // Prepare the datasets that should be visible.
+            
+            // Prepare datasets based on both time filter and visibility toggle
             const datasetsForDisplay = fullDatasets.map(ds => {
                 const filteredData = (minTimestamp != null && maxTimestamp != null)
                     ? ds.originalData.filter(d => d.x >= minTimestamp && d.x <= maxTimestamp)
@@ -380,7 +399,6 @@
             }
             
             if (fullDatasets.length === 0) {
-                 // Clear canvas if no data
                 const ctx = chartCanvas.getContext('2d');
                 ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
                 return;
@@ -393,9 +411,21 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    animation: false, // Turn off animation for snappy redraws
+                    animation: false, 
                     plugins: {
-                        legend: { position: 'top', labels: { color: '#d1d5db' }},
+                        legend: { 
+                            display: true,
+                            position: 'top',
+                            labels: { color: '#d1d5db' },
+                            onClick: (e, legendItem, legend) => {
+                                const clickedLabel = legendItem.text;
+                                const ds = fullDatasets.find(d => d.label === clickedLabel);
+                                if (ds) {
+                                    ds.hidden = !ds.hidden;
+                                    drawOrUpdateChart();
+                                }
+                            }
+                        },
                         title: { display: true, text: translations[currentLang].chartTitle, color: '#f9fafb', font: { size: 18 }},
                         tooltip: {
                             mode: 'index',
@@ -475,7 +505,7 @@
             document.querySelectorAll('[data-i18n-key]').forEach(el => {
                 const key = el.dataset.i18nKey;
                 const translationGroup = translations[lang].quickSelect;
-                const translation = (key in translationGroup) ? translationGroup[key] : translations[lang][key];
+                const translation = (key in translationGroup) ? translationGroup[key] : (translations[lang][key] || key);
                 if (typeof translation === 'string') el.textContent = translation;
             });
             
@@ -526,7 +556,6 @@
                 dateFormat: "Z", 
                 onChange: function(selectedDates, dateStr, instance) {
                    instance.input.value = formatRangeForInput(selectedDates);
-                   // The single point of truth for updating the chart view
                    drawOrUpdateChart();
                 }
             });
@@ -569,7 +598,7 @@
 
         resetFilterButton.addEventListener('click', () => {
              if (flatpickrInstance) {
-                flatpickrInstance.clear(true); // true triggers onChange, which calls drawOrUpdateChart
+                flatpickrInstance.clear(true);
              }
         });
         
@@ -586,6 +615,16 @@
              if (pointChart) {
                 pointChart.resetZoom();
              }
+        });
+
+        selectAllBtn.addEventListener('click', () => {
+            fullDatasets.forEach(ds => ds.hidden = false);
+            drawOrUpdateChart();
+        });
+
+        deselectAllBtn.addEventListener('click', () => {
+            fullDatasets.forEach(ds => ds.hidden = true);
+            drawOrUpdateChart();
         });
 
         langSwitcherContainer.addEventListener('click', (e) => {
