@@ -152,7 +152,7 @@
                 footerDisclaimer: "免责声明：本工具仅为个人项目，数据仅供参考，不保证其准确性和实时性。",
                 zoomEnabledTitle: "禁用框选缩放",
                 zoomDisabledTitle: "启用框选缩放",
-                zoomBackTitle: "返回上一级视图",
+                zoomBackTitle: "重置缩放",
                 statusLoading: "正在获取数据...",
                 statusFetchingNames: "正在获取玩家昵称...",
                 statusFetchingPoints: "正在获取贡献度数据...",
@@ -162,9 +162,9 @@
                 errorFetchName: "获取ID {id} 的昵称失败",
                 errorFetchPoints: "获取ID {id} 的贡献数据失败",
                 chartTitle: "贡献度变化曲线",
-                chartAxisX: "时间 (可拖拽/滚轮缩放)",
+                chartAxisX: "时间 (JST - 可拖拽/滚轮缩放)",
                 chartAxisY: "贡献度 (Point)",
-                quickSelect: { today: '今天', yesterday: '昨天', last1h: '最近1小时', last3h: '最近3小时', last6h: '最近6小时' }
+                quickSelect: { today: '今天 (JST)', yesterday: '昨天 (JST)', last1h: '最近1小时', last3h: '最近3小时', last6h: '最近6小时' }
             },
             en: {
                 title: "GBF Honor Visualizer",
@@ -182,7 +182,7 @@
                 footerDisclaimer: "Disclaimer: This is a personal project. Data is for reference only and accuracy is not guaranteed.",
                 zoomEnabledTitle: "Disable Drag to Zoom",
                 zoomDisabledTitle: "Enable Drag to Zoom",
-                zoomBackTitle: "Zoom Out",
+                zoomBackTitle: "Reset Zoom",
                 statusLoading: "Fetching data...",
                 statusFetchingNames: "Fetching player names...",
                 statusFetchingPoints: "Fetching honor data...",
@@ -192,9 +192,9 @@
                 errorFetchName: "Failed to fetch name for ID {id}",
                 errorFetchPoints: "Failed to fetch honor data for ID {id}",
                 chartTitle: "Honor Contribution Curve",
-                chartAxisX: "Time (Drag/scroll to zoom)",
+                chartAxisX: "Time (JST - Drag/scroll to zoom)",
                 chartAxisY: "Honor (Points)",
-                quickSelect: { today: 'Today', yesterday: 'Yesterday', last1h: 'Last 1h', last3h: 'Last 3h', last6h: 'Last 6h' }
+                quickSelect: { today: 'Today (JST)', yesterday: 'Yesterday (JST)', last1h: 'Last 1h', last3h: 'Last 3h', last6h: 'Last 6h' }
             },
             ja: {
                 title: "グラブル貢献度可視化ツール",
@@ -212,7 +212,7 @@
                 footerDisclaimer: "免責事項：これは個人プロジェクトです。データは参考用であり、その正確性を保証するものではありません。",
                 zoomEnabledTitle: "ドラッグズームを無効化",
                 zoomDisabledTitle: "ドラッグズームを有効化",
-                zoomBackTitle: "ズームアウト",
+                zoomBackTitle: "ズームをリセット",
                 statusLoading: "データを取得しています...",
                 statusFetchingNames: "プレイヤー名を取得中...",
                 statusFetchingPoints: "貢献度データを取得中...",
@@ -222,9 +222,9 @@
                 errorFetchName: "ID {id} の名前の取得に失敗しました",
                 errorFetchPoints: "ID {id} の貢献度データの取得に失敗しました",
                 chartTitle: "貢献度変化曲線",
-                chartAxisX: "時間 (ドラッグ/スクロールでズーム)",
+                chartAxisX: "時間 (JST - ドラッグ/スクロールでズーム)",
                 chartAxisY: "貢献度 (ポイント)",
-                quickSelect: { today: '今日', yesterday: '昨日', last1h: '最近1時間', last3h: '最近3時間', last6h: '最近6時間' }
+                quickSelect: { today: '今日 (JST)', yesterday: '昨日 (JST)', last1h: '最近1時間', last3h: '最近3時間', last6h: '最近6時間' }
             }
         };
         let currentLang = 'zh';
@@ -241,14 +241,10 @@
         const langSwitcherContainer = document.getElementById('lang-switcher-container');
         const toggleZoomBtn = document.getElementById('toggle-zoom-btn');
         const zoomBackBtn = document.getElementById('zoom-back-btn');
-        const iconZoomEnabled = document.getElementById('icon-zoom-enabled');
-        const iconZoomDisabled = document.getElementById('icon-zoom-disabled');
         
         let pointChart = null;
         let fullDatasets = [];
         let flatpickrInstance = null;
-        let zoomHistory = [];
-        let initialRange = null;
         
         async function fetchUserName(userId) {
             try {
@@ -339,35 +335,30 @@
             fullDatasets = validResults.map(result => {
                 const color = getRandomColor();
                 const label = result.nickname ? `${result.nickname} (ID: ${result.id})` : `ID: ${result.id}`;
-                const dataPoints = result.data.map(d => ({ x: d.updatetime * 1000, y: d.point }));
+                const dataPoints = result.data
+                    .map(d => ({ x: d.updatetime * 1000, y: d.point }))
+                    .sort((a, b) => a.x - b.x); 
                 return { label, data: dataPoints, originalData: dataPoints, borderColor: color, backgroundColor: color.replace('0.8', '0.2'), tension: 0.1, borderWidth: 2, pointBackgroundColor: color, pointRadius: 3, pointHoverRadius: 6 };
             });
             
-            drawChart();
+            drawOrUpdateChart();
             
             fetchButton.disabled = false;
             fetchButton.classList.remove('opacity-50', 'cursor-not-allowed');
         }
         
-        function updateInputsFromChart() {
-            if (!pointChart || !flatpickrInstance) return;
-            const { min, max } = pointChart.scales.x;
-            flatpickrInstance.setDate([new Date(min), new Date(max)], false); 
-        }
-        
         function updateZoomButtons() {
             if (!pointChart) return;
-            zoomBackBtn.disabled = zoomHistory.length <= 1;
-            
-            const isZoomEnabled = pointChart.options.plugins.zoom.zoom.drag.enabled;
-            iconZoomEnabled.classList.toggle('hidden', isZoomEnabled);
-            iconZoomDisabled.classList.toggle('hidden', !isZoomEnabled);
+            const isZoomed = pointChart.isZoomedOrPanned();
+            zoomBackBtn.disabled = !isZoomed;
         }
 
-        function filterAndDrawChart(newBaseRange = false) {
-            if (!pointChart) return;
-            
-            const selectedDates = flatpickrInstance.selectedDates;
+        /**
+         * [FINAL FIX] The single source of truth for drawing or updating the chart.
+         * It destroys and recreates the chart to avoid state issues.
+         */
+        function drawOrUpdateChart() {
+            const selectedDates = flatpickrInstance ? flatpickrInstance.selectedDates : [];
             let minTimestamp = null;
             let maxTimestamp = null;
 
@@ -375,70 +366,103 @@
                 minTimestamp = selectedDates[0].getTime();
                 maxTimestamp = selectedDates[1].getTime();
             }
-            
-            if (newBaseRange && minTimestamp && maxTimestamp) {
-                zoomHistory = [{min: minTimestamp, max: maxTimestamp}];
+
+            // Prepare the datasets that should be visible.
+            const datasetsForDisplay = fullDatasets.map(ds => {
+                const filteredData = (minTimestamp != null && maxTimestamp != null)
+                    ? ds.originalData.filter(d => d.x >= minTimestamp && d.x <= maxTimestamp)
+                    : ds.originalData;
+                return { ...ds, data: filteredData };
+            });
+
+            if (pointChart) {
+                pointChart.destroy();
             }
-
-            pointChart.options.scales.x.min = minTimestamp;
-            pointChart.options.scales.x.max = maxTimestamp;
-
-            pointChart.update('none');
-            updateZoomButtons();
-        }
-
-        function drawChart() {
-            if (pointChart) pointChart.destroy();
-            if (fullDatasets.length === 0) return;
+            
+            if (fullDatasets.length === 0) {
+                 // Clear canvas if no data
+                const ctx = chartCanvas.getContext('2d');
+                ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
+                return;
+            }
 
             const ctx = chartCanvas.getContext('2d');
             pointChart = new Chart(ctx, {
                 type: 'line',
-                data: { datasets: fullDatasets.map(ds => ({...ds, data: ds.originalData})) },
+                data: { datasets: datasetsForDisplay },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: false, // Turn off animation for snappy redraws
                     plugins: {
                         legend: { position: 'top', labels: { color: '#d1d5db' }},
                         title: { display: true, text: translations[currentLang].chartTitle, color: '#f9fafb', font: { size: 18 }},
-                        tooltip: { mode: 'index', intersect: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                title: function(tooltipItems) {
+                                    if (!tooltipItems.length) return '';
+                                    const timestamp = tooltipItems[0].parsed.x;
+                                    const date = new Date(timestamp);
+                                    const formatter = new Intl.DateTimeFormat('en-CA', {
+                                        year: 'numeric', month: '2-digit', day: '2-digit',
+                                        hour: '2-digit', minute: '2-digit',
+                                        hour12: false,
+                                        timeZone: 'Asia/Tokyo'
+                                    });
+                                    return formatter.format(date).replace(/,/g, '') + ' JST';
+                                }
+                            }
+                        },
                         zoom: {
-                            pan: { enabled: true, mode: 'x', threshold: 5 },
+                            pan: { enabled: true, mode: 'x', onPanComplete: updateZoomButtons },
                             zoom: {
                                 wheel: { enabled: true },
                                 drag: { enabled: false },
                                 mode: 'x',
-                                onZoomComplete: (context) => {
-                                    const { min, max } = context.chart.scales.x;
-                                    const lastState = zoomHistory[zoomHistory.length - 1] || {};
-                                    if (lastState.min !== min || lastState.max !== max) zoomHistory.push({ min, max });
-                                    updateInputsFromChart();
-                                    updateZoomButtons();
-                                }
+                                onZoomComplete: updateZoomButtons
                             }
                         }
                     },
                     scales: {
                         x: {
                             type: 'time',
-                            time: { unit: 'hour', tooltipFormat: 'yyyy-MM-dd HH:mm', displayFormats: { hour: 'MM-dd HH:mm' }},
                             title: { display: true, text: translations[currentLang].chartAxisX, color: '#9ca3af' },
-                            ticks: { color: '#9ca3af' },
-                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: {
+                                color: '#9ca3af',
+                                maxRotation: 70,
+                                minRotation: 70,
+                                source: 'auto',
+                                callback: function(value, index, ticks) {
+                                    const currentTickDate = new Date(value);
+                                    const prevTickDate = index > 0 ? new Date(ticks[index - 1].value) : null;
+                                    
+                                    const jstHourFormatter = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' });
+                                    
+                                    let isNewDay = !prevTickDate || (
+                                        new Date(currentTickDate.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' })).getDate() !== 
+                                        new Date(prevTickDate.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' })).getDate()
+                                    );
+
+                                    if (isNewDay) {
+                                        const jstDateFormatter = new Intl.DateTimeFormat('ja-JP', { month: '2-digit', day: '2-digit', timeZone: 'Asia/Tokyo' });
+                                        return [jstDateFormatter.format(currentTickDate), jstHourFormatter.format(currentTickDate)];
+                                    }
+                                    return jstHourFormatter.format(currentTickDate);
+                                }
+                            }
                         },
                         y: {
                             title: { display: true, text: translations[currentLang].chartAxisY, color: '#9ca3af' },
-                            ticks: { color: '#9ca3af', callback: v => (v >= 1e8) ? (v/1e8)+'亿' : (v >= 1e4) ? (v/1e4)+'万' : v },
+                            ticks: { color: '#9ca3af', callback: v => (v >= 1e8) ? (v/1e8).toFixed(2)+'亿' : (v >= 1e4) ? (v/1e4).toFixed(2)+'万' : v },
                             grid: { color: 'rgba(255, 255, 255, 0.1)' }
                         }
                     }
                 }
             });
-            const { min, max } = pointChart.scales.x;
-            initialRange = {min, max};
-            zoomHistory = [initialRange];
             updateZoomButtons();
-            filterAndDrawChart();
         }
         
         function setLanguage(lang) {
@@ -450,7 +474,9 @@
 
             document.querySelectorAll('[data-i18n-key]').forEach(el => {
                 const key = el.dataset.i18nKey;
-                el.textContent = translations[lang][key] || el.textContent;
+                const translationGroup = translations[lang].quickSelect;
+                const translation = (key in translationGroup) ? translationGroup[key] : translations[lang][key];
+                if (typeof translation === 'string') el.textContent = translation;
             });
             
             document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
@@ -475,9 +501,18 @@
                 pointChart.update();
             }
 
-            iconZoomEnabled.setAttribute('title', translations[lang].zoomDisabledTitle);
-            iconZoomDisabled.setAttribute('title', translations[lang].zoomEnabledTitle);
-            zoomBackBtn.setAttribute('title', translations[lang].zoomBackTitle);
+            document.getElementById('icon-zoom-enabled').title = translations[lang].zoomDisabledTitle;
+            document.getElementById('icon-zoom-disabled').title = translations[lang].zoomEnabledTitle;
+            zoomBackBtn.title = translations[lang].zoomBackTitle;
+        }
+
+        function formatRangeForInput(dates) {
+            if (!dates || dates.length !== 2) return '';
+            const formatOptions = { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
+            const formatter = new Intl.DateTimeFormat('sv-SE', formatOptions);
+            const startJST = formatter.format(dates[0]);
+            const endJST = formatter.format(dates[1]);
+            return `${startJST} — ${endJST}`;
         }
         
         function initTimePickers() {
@@ -488,27 +523,11 @@
                 mode: 'range',
                 enableTime: true,
                 time_24hr: true,
-                dateFormat: "Y-m-d H:i",
-                defaultHour: 0,
-                defaultMinute: 0,
-                onClose: function(selectedDates, dateStr, instance) {
-                    if (selectedDates.length === 2) {
-                        const start = selectedDates[0];
-                        const end = selectedDates[1];
-                        if (start.getTime() === end.getTime()) {
-                             const newEnd = new Date(end);
-                             newEnd.setHours(23, 59, 59, 999);
-                             instance.setDate([start, newEnd], true);
-                        } else if (start.getHours() === 0 && start.getMinutes() === 0 &&
-                                   end.getHours() === 0 && end.getMinutes() === 0) {
-                            const newEnd = new Date(end);
-                            newEnd.setHours(23, 59, 59, 999);
-                            if (newEnd.getTime() > start.getTime()) instance.setDate([start, newEnd], true);
-                        }
-                    }
-                },
-                onChange: function(selectedDates) {
-                    if (selectedDates.length === 2) filterAndDrawChart(true);
+                dateFormat: "Z", 
+                onChange: function(selectedDates, dateStr, instance) {
+                   instance.input.value = formatRangeForInput(selectedDates);
+                   // The single point of truth for updating the chart view
+                   drawOrUpdateChart();
                 }
             });
 
@@ -523,13 +542,21 @@
                 btn.className = 'quick-select-btn';
                 btn.textContent = translations[currentLang].quickSelect[selection.key];
                 btn.addEventListener('click', () => {
-                    const now = new Date(); let start, end;
+                    const now = new Date();
+                    let start, end;
+
                     if (selection.hours) {
-                        end = now; start = new Date(now.getTime() + selection.hours * 60 * 60 * 1000);
+                        end = now;
+                        start = new Date(now.getTime() + selection.hours * 60 * 60 * 1000);
                     } else {
-                         const targetDate = new Date(now.getTime() + selection.days * 24 * 60 * 60 * 1000);
-                         start = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
-                         end = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59);
+                        const baseDate = new Date(now.valueOf() + selection.days * 24 * 3600 * 1000);
+                        const jstDateParts = new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Tokyo'}).formatToParts(baseDate);
+                        const year = jstDateParts.find(p => p.type === 'year').value;
+                        const month = jstDateParts.find(p => p.type === 'month').value;
+                        const day = jstDateParts.find(p => p.type === 'day').value;
+                        
+                        start = new Date(`${year}-${month}-${day}T00:00:00+09:00`);
+                        end = new Date(`${year}-${month}-${day}T23:59:59+09:00`);
                     }
                     flatpickrInstance.setDate([start, end], true);
                 });
@@ -539,32 +566,26 @@
         
         // --- Event Listeners ---
         fetchButton.addEventListener('click', handleFetchAndDraw);
+
         resetFilterButton.addEventListener('click', () => {
-            if (flatpickrInstance) flatpickrInstance.clear();
-            if (pointChart) {
-                pointChart.zoomScale('x', initialRange, 'none');
-                zoomHistory = [initialRange];
-                updateInputsFromChart();
-                updateZoomButtons();
-            }
+             if (flatpickrInstance) {
+                flatpickrInstance.clear(true); // true triggers onChange, which calls drawOrUpdateChart
+             }
         });
         
         toggleZoomBtn.addEventListener('click', () => {
             if (!pointChart) return;
             const zoomOptions = pointChart.options.plugins.zoom.zoom;
             zoomOptions.drag.enabled = !zoomOptions.drag.enabled;
+            const panOptions = pointChart.options.plugins.zoom.pan;
+            panOptions.enabled = !zoomOptions.drag.enabled;
             pointChart.update('none');
-            updateZoomButtons();
         });
 
         zoomBackBtn.addEventListener('click', () => {
-            if (zoomHistory.length > 1) {
-                zoomHistory.pop();
-                const prevState = zoomHistory[zoomHistory.length - 1];
-                pointChart.zoomScale('x', prevState, 'none');
-                updateInputsFromChart();
-                updateZoomButtons();
-            }
+             if (pointChart) {
+                pointChart.resetZoom();
+             }
         });
 
         langSwitcherContainer.addEventListener('click', (e) => {
@@ -576,9 +597,8 @@
         window.addEventListener('load', () => {
             const savedLang = localStorage.getItem('gbf-tool-language');
             const browserLang = navigator.language.split('-')[0];
-            const initialLang = savedLang || (['en', 'ja'].includes(browserLang) ? browserLang : 'zh');
+            const initialLang = savedLang || (['en', 'ja', 'zh'].includes(browserLang) ? browserLang : 'zh');
             setLanguage(initialLang);
-            updateZoomButtons();
         });
     </script>
 </body>
